@@ -1,6 +1,8 @@
 import { FormEvent, useState } from "react"
 import api from "../services/api"
 import { Navigate } from "react-router-dom"
+import { setParticipantId, setRoomId } from "../services/session"
+import { Socket } from "socket.io-client"
 
 interface Room {
   id: string
@@ -10,13 +12,16 @@ interface Room {
 
 interface Participant {
   id: string
-  scocket: unknown
+  scocket: Socket
 }
 
 interface Response {
-  message: string
-  room: Room
-  participant: Participant
+  status: number
+  data: {
+    message: string
+    room: Room
+    participant: Participant
+  }
 }
 
 function Homepage() {
@@ -26,32 +31,27 @@ function Homepage() {
   async function execute(data: { [key:string]: string }) {
     console.log("request", data)
 
-    const response = await api.post('/room', data).catch(error => {
+    const response: Response = await api.post('/room', data).catch(error => {
       return error.response
     })
 
     if (response.status !== 201) {
-      updateRoom(room => null)
-      updateError(error => {
+      updateRoom(_ => null)
+      updateError(_ => {
         return response.data.message
       })
     }
 
-    updateData(response.data as Response)
-
-    updateRoom(room => {
+    setRoomId(response.data.room.id)
+    setParticipantId(response.data.participant.id)
+    updateRoom(_ => {
       return response.data.room
     })
   }
 
-  function updateData(data: Response) {
-    localStorage.setItem('game-room_id', JSON.stringify(data.room.id))
-    localStorage.setItem('game-participant_id', JSON.stringify(data.participant.id))
-  }
-
 
   function handleSubmit(event: FormEvent) {
-    updateError(error => null)
+    updateError(_ => null)
     event.preventDefault()
     const formData = new FormData(event.currentTarget as HTMLFormElement)
     let data: { [key:string]: string } = {}

@@ -19,6 +19,8 @@ interface Pages {
 
 const pages: Pages = import.meta.glob("./pages/**/*.tsx", { eager: true });
 
+console.log(pages)
+
 const routes: Route[] = [];
 for (const path of Object.keys(pages)) {
   const fileName = path.match(/\.\/pages\/(.*)\.tsx$/)?.[1];

@@ -1,37 +1,29 @@
 
-import { useParams } from "react-router-dom"
+import { useParams, LoaderFunctionArgs, useLoaderData } from "react-router-dom"
 import socket from "../../services/socket";
-import { FormEvent } from "react";
+import { FormEvent, useState } from "react";
+import { getParticipantId, setParticipantId, setRoomId } from "../../services/session";
 
 type RoomParams = {
     room_id: string;
 }
 
 export default function Room() {
-    const { room_id } = useParams<RoomParams>()
-
-    socket.on("connect", () => {
-        console.log("connected")
-    })
-
-    socket.emit("join", { room_id, participant_id: getParticipantId() })
-
-    socket.on("participant_id", (data: { participant_id: string }) => {
-        localStorage.setItem('game-participant_id', JSON.stringify(data.participant_id))
-    })
-
-    socket.on("disconnect", () => {
-        console.log("disconnected")
-        socket.emit("leave", { room_id, participant_id: getParticipantId() })
-    })
-
-    socket.on("reconnect", () => {
-        console.log("reconnected")
-        socket.emit("join", { room_id, participant_id: getParticipantId() })
-    })
+    const { room_id } = useLoaderData() as RoomParams
+    const [timer, updateTimer] = useState<number>(30)
+    const [output, setOutput] = useState<string | null>(null)
 
     socket.on("message_room", (data: { message: string, owner: string }) => {
-        console.log(data)
+        updateOutput(data)
+    })
+
+    socket.on("participant_id", (data: { participant_id: string }) => {
+        setParticipantId(data.participant_id)
+    })
+
+    socket.on('start', () => {
+        console.log("start")
+        startTimer()
     })
 
     function handleSubmit(event: FormEvent) {
@@ -42,24 +34,39 @@ export default function Room() {
         data[key] = value.toString().trim() as string
         })
 
+        console.log("send message")
         socket.emit("message", { room_id, owner: getParticipantId(), message: data["message"] })
     }
-    
-    function getParticipantId() {
-        const participant_id = localStorage.getItem('game-participant_id')
-        if (!participant_id) {
-            return null
-        }
-        return JSON.parse(participant_id)
+
+    function updateOutput(data: any) {
+        setOutput(_ => {
+            return JSON.stringify(data, null, 2)
+        })
     }
+
+    function startTimer() {
+        let time = 30
+        const interval = setInterval(() => {
+            time--
+            updateTimer(_ => time)
+            if (time === 0) {
+                clearInterval(interval)
+            }
+        }, 1000)
+    }
+
     return (
         <div className="flex flex-col max-h-screen overflow-hidden">
             <span>Room id: {room_id}</span>
             <span>Participant id: {getParticipantId()}</span>
+            <span className="text-lg text-slate-700">{timer}</span>
 
             <div className="w-full h-screen overflow-hidden">
-                <div className="w-full h-full overflow-y-scroll">
-                </div>
+                {output && (
+                    <pre className="text-sm bg-zinc-800 text-zinc-100 p-6 rounded-lg">
+                    {output}
+                </pre>
+                )}
             </div>
             <form onSubmit={handleSubmit} className="w-full flex justify-center items-center bg-gray-200">
                 <label className="w-full h-full px-2 py-4 focus-within:outline-2 focus-within:outline-emerald-300 focus-within:outline" htmlFor="message">
@@ -71,4 +78,13 @@ export default function Room() {
             </form>
         </div>
     )
+}
+
+export async function loader({ params }: LoaderFunctionArgs): Promise<{}> {
+    const { room_id } = params as { room_id: string }
+
+    setRoomId(room_id)
+    socket.emit("join", { room_id, participant_id: getParticipantId() })
+
+    return { room_id }
 }
